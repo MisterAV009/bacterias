@@ -24,6 +24,8 @@ while True:
             pass
     for id in players:
         try:
-            id.send('no ok'.encode())
+            id.send('g'.encode())
         except:
-            pass
+            players.remove(id)
+            id.close()
+            print('сокет закрыт')
