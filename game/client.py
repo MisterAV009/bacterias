@@ -48,6 +48,7 @@ while run:
     pygame.draw.circle(screen, (255, 0, 0), CC, radius)
     draw_text(CC[0],CC[1],radius // 2,name,'blue')
     pygame.display.update()
+    print('ядерка летит')
 
 
 
