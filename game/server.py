@@ -3,6 +3,7 @@ import time
 import psycopg2
 from sqlalchemy import create_engine,Column,String,Integer
 from sqlalchemy.orm import declarative_base,sessionmaker
+import pygame
 
 
 engine = create_engine('postgresql+psycopg2://postgres:1@localhost/bacterias')
@@ -17,6 +18,18 @@ main_socket.bind(("localhost",10000)) # привязываем айпи адре
 main_socket.setblocking(False) # непрерывность, сервер не ждет ответ от клиента
 main_socket.listen(5) # прослушка 5 одновременных соединений
 print('cокет подключен')
+
+pygame.init()
+
+WIDTH_ROOM,HEIGHT_ROOM = 4000,4000
+WIDTH_SERVER,HEIGHT_SERVER = 300,300
+FPS = 120
+
+screen = pygame.display.set_mode((WIDTH_SERVER,HEIGHT_SERVER))
+pygame.display.set_caption('server')
+
+clock = pygame.time.Clock()
+
 
 
 class Player(Base):
@@ -63,7 +76,14 @@ class LocalPlayer:
 Base.metadata.create_all(engine)
 players = {}
 
-while True:
+server_works = True
+
+while server_works:
+    clock.tick(FPS)
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            server_works = False
+
     try:
         new_sock,addr = main_socket.accept()
         print(new_sock,addr)
@@ -91,6 +111,15 @@ while True:
             del players[id]
             players[id].sock.close()
             print('сокет закрыт')
-
-
-    time.sleep(1)
+    screen.fill('black')
+    for id in list(players):
+        player = players[id]
+        x = player.x * WIDTH_SERVER // WIDTH_ROOM
+        y = player.y * HEIGHT_SERVER // HEIGHT_ROOM
+        size = player.size * WIDTH_SERVER // WIDTH_ROOM
+        pygame.draw.circle(screen,'red',(x,y),size)
+        pygame.display.update()
+pygame.quit()
+main_socket.close()
+s.query(Player).delete()
+s.commit()
