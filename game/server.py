@@ -1,35 +1,44 @@
 import socket
 import time
 import psycopg2
-from sqlalchemy import create_engine,Column,String,Integer
-from sqlalchemy.orm import declarative_base,sessionmaker
+from sqlalchemy import create_engine, Column, String, Integer
+from sqlalchemy.orm import declarative_base, sessionmaker
 import pygame
-
 
 engine = create_engine('postgresql+psycopg2://postgres:1@localhost/bacterias')
 Base = declarative_base()
 Session = sessionmaker(bind=engine)
 s = Session()
 
-
-main_socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM) # выбираем семейство адресов IPv4,тип сокета TCP
-main_socket.setsockopt(socket.IPPROTO_TCP,socket.TCP_NODELAY,1) # откл. пакетирование,чтобы не портить фпс
-main_socket.bind(("localhost",10000)) # привязываем айпи адрес и порт
-main_socket.setblocking(False) # непрерывность, сервер не ждет ответ от клиента
-main_socket.listen(5) # прослушка 5 одновременных соединений
+main_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # выбираем семейство адресов IPv4,тип сокета TCP
+main_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)  # откл. пакетирование,чтобы не портить фпс
+main_socket.bind(("localhost", 10000))  # привязываем айпи адрес и порт
+main_socket.setblocking(False)  # непрерывность, сервер не ждет ответ от клиента
+main_socket.listen(5)  # прослушка 5 одновременных соединений
 print('cокет подключен')
 
 pygame.init()
 
-WIDTH_ROOM,HEIGHT_ROOM = 4000,4000
-WIDTH_SERVER,HEIGHT_SERVER = 300,300
+WIDTH_ROOM, HEIGHT_ROOM = 4000, 4000
+WIDTH_SERVER, HEIGHT_SERVER = 300, 300
 FPS = 120
 
-screen = pygame.display.set_mode((WIDTH_SERVER,HEIGHT_SERVER))
+screen = pygame.display.set_mode((WIDTH_SERVER, HEIGHT_SERVER))
 pygame.display.set_caption('server')
 
 clock = pygame.time.Clock()
 
+
+def find(vector: str):
+    first = None
+    for num, sign in enumerate(vector):
+        if sign == "<":
+            first = num
+        if sign == ">" and first is not None:
+            second = num
+            result = list(map(float, vector[first + 1:second].split(",")))
+            return result
+    return ""
 
 
 class Player(Base):
@@ -42,8 +51,8 @@ class Player(Base):
     site = Column(Integer, default=50)
     errors = Column(Integer, default=0)
     abs_speed = Column(Integer, default=1)
-    speed_x = Column(Integer, default=0)
-    speed_y = Column(Integer, default=0)
+    speed_x = Column(Integer, default=2)
+    speed_y = Column(Integer, default=2)
     color = Column(String(250), default='red')
     w_vision = Column(Integer, default=800)
     h_vision = Column(Integer, default=600)
@@ -65,12 +74,15 @@ class LocalPlayer:
         self.size = 50
         self.errors = 0
         self.abs_speed = 1
-        self.speed_x = 0
-        self.speed_y = 0
+        self.speed_x = 2
+        self.speed_y = 2
         self.color = "red"
         self.w_vision = 800
         self.h_vision = 600
 
+    def update(self):
+        self.x += self.speed_x
+        self.y += self.speed_y
 
 
 Base.metadata.create_all(engine)
@@ -85,16 +97,16 @@ while server_works:
             server_works = False
 
     try:
-        new_sock,addr = main_socket.accept()
-        print(new_sock,addr)
+        new_sock, addr = main_socket.accept()
+        print(new_sock, addr)
         new_sock.setblocking(False)
-        player = Player('bob',addr)
+        player = Player('bob', addr)
         s.merge(player)
         s.commit()
         addr = f'({addr[0]},{addr[1]})'
         data = s.query(Player).filter(Player.address == addr)
         for user in data:
-            player = LocalPlayer(user.id,'bob',new_sock,addr)
+            player = LocalPlayer(user.id, 'bob', new_sock, addr)
             players[user.id] = player
     except BlockingIOError:
         pass
@@ -117,7 +129,7 @@ while server_works:
         x = player.x * WIDTH_SERVER // WIDTH_ROOM
         y = player.y * HEIGHT_SERVER // HEIGHT_ROOM
         size = player.size * WIDTH_SERVER // WIDTH_ROOM
-        pygame.draw.circle(screen,'red',(x,y),size)
+        pygame.draw.circle(screen, 'red', (x, y), size)
         pygame.display.update()
 pygame.quit()
 main_socket.close()
