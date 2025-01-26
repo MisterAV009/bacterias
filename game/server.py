@@ -41,6 +41,18 @@ def find(vector: str):
     return ""
 
 
+def find_color(info: str):
+    first = None
+    for num, sign in enumerate(info):
+        if sign == "<":
+            first = num
+        if sign == ">" and first is not None:
+            second = num
+            result = info[first + 1:second].split(",")
+            return result
+    return ""
+
+
 class Player(Base):
     __tablename__ = "gamers"
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -48,7 +60,7 @@ class Player(Base):
     address = Column(String)
     x = Column(Integer, default=500)
     y = Column(Integer, default=500)
-    site = Column(Integer, default=50)
+    size = Column(Integer, default=50)
     errors = Column(Integer, default=0)
     abs_speed = Column(Integer, default=1)
     speed_x = Column(Integer, default=2)
@@ -73,7 +85,7 @@ class LocalPlayer:
         self.y = 500
         self.size = 50
         self.errors = 0
-        self.abs_speed = 1
+        self.abs_speed = 2
         self.speed_x = 2
         self.speed_y = 2
         self.color = "red"
@@ -84,7 +96,43 @@ class LocalPlayer:
         self.x += self.speed_x
         self.y += self.speed_y
 
+    def change_speed(self, vector: str):
+        vector = find(vector)
+        if vector[0] == 0 and vector[1] == 0:
+            self.speed_x = self.speed_y = 0
+        else:
+            vector = vector[0] * self.abs_speed, vector[1] * self.abs_speed
+            self.speed_x = vector[0]
+            self.speed_y = vector[1]
 
+    def load(self):
+        self.size = self.db.size
+        self.abs_speed = self.db.abs_speed
+        self.speed_x = self.db.speed_x
+        self.speed_y = self.db.speed_y
+        self.errors = self.db.errors
+        self.x = self.db.x
+        self.y = self.db.y
+        self.color = self.db.color
+        self.w_vision = self.db.w_vision
+        self.h_vision = self.db.h_vision
+        return self
+    def sync(self):
+        self.db.size = self.size
+        self.db.abs_speed = self.abs_speed
+        self.db.speed_x = self.speed_x
+        self.db.speed_y = self.speed_y
+        self.db.errors = self.errors
+        self.db.x = self.x
+        self.db.y = self.y
+        self.db.color = self.color
+        self.db.w_vision = self.w_vision
+        self.db.h_vision = self.h_vision
+        s.merge(self.db)
+        s.commit()
+
+
+Base.metadata.drop_all(engine)
 Base.metadata.create_all(engine)
 players = {}
 
@@ -100,13 +148,17 @@ while server_works:
         new_sock, addr = main_socket.accept()
         print(new_sock, addr)
         new_sock.setblocking(False)
+        login = new_sock.recv(1024).decode()
         player = Player('bob', addr)
+        if login.startswith('color'):
+            data = find_color(login[6:])
+            player.name, player.color = data
         s.merge(player)
         s.commit()
         addr = f'({addr[0]},{addr[1]})'
         data = s.query(Player).filter(Player.address == addr)
         for user in data:
-            player = LocalPlayer(user.id, 'bob', new_sock, addr)
+            player = LocalPlayer(user.id, 'bob', new_sock, addr).load()
             players[user.id] = player
     except BlockingIOError:
         pass
@@ -114,6 +166,7 @@ while server_works:
         try:
             data = players[id].sock.recv(1024).decode()
             print(data)
+            players[id].change_speed(data)
         except:
             pass
     for id in list(players):
@@ -129,8 +182,13 @@ while server_works:
         x = player.x * WIDTH_SERVER // WIDTH_ROOM
         y = player.y * HEIGHT_SERVER // HEIGHT_ROOM
         size = player.size * WIDTH_SERVER // WIDTH_ROOM
-        pygame.draw.circle(screen, 'red', (x, y), size)
-        pygame.display.update()
+        pygame.draw.circle(screen, player.color, (x, y), size)
+    for id in list(players):
+        player = players[id]
+        players[id].update()
+        players[id].sync()
+    pygame.display.update()
+
 pygame.quit()
 main_socket.close()
 s.query(Player).delete()
