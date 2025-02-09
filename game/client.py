@@ -8,6 +8,29 @@ import tkinter.messagebox
 name = ''
 color = ''
 
+def find(vector: str):
+    first = None
+    for num, sign in enumerate(vector):
+        if sign == "<":
+            first = num
+        if sign == ">" and first is not None:
+            second = num
+            result = vector[first + 1:second].split(",")
+            return result
+    return ""
+
+
+def draw_bacterias(data: list[str]):
+    for num,element in enumerate(data):
+        data = element.split(' ')
+        x = CC[0] + int(data[0])
+        y = CC[1] + int(data[1])
+        size = int(data[2])
+        zvet_bakt = data[3]
+        pygame.draw.circle(screen,zvet_bakt,(x,y),size)
+
+
+
 
 def login():
     global name
@@ -97,9 +120,12 @@ while run:
                 sockets.send(msg.encode())
             print(vector)
     data = sockets.recv(1024).decode()
-    print(data)
+    # print(data)
+    data = find(data)
     screen.fill("gray")
     pygame.draw.circle(screen, color, CC, radius)
+    if data != ['']:
+        draw_bacterias(data)
     draw_text(CC[0], CC[1], radius // 2, name, 'blue')
     pygame.display.update()
     print('ядерка летит')
