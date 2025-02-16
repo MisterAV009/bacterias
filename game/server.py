@@ -1,3 +1,4 @@
+import math
 import random
 import socket
 import time
@@ -23,7 +24,7 @@ pygame.init()
 
 WIDTH_ROOM, HEIGHT_ROOM = 4000, 4000
 WIDTH_SERVER, HEIGHT_SERVER = 300, 300
-FPS = 120
+FPS = 100
 colors = ['Maroon', 'DarkRed', 'FireBrick', 'Red', 'Salmon', 'Tomato', 'Coral', 'OrangeRed', 'Chocolate', 'SandyBrown',
           'DarkOrange', 'Orange', 'DarkGoldenrod', 'Goldenrod', 'Gold', 'Olive', 'Yellow', 'YellowGreen', 'GreenYellow',
           'Chartreuse', 'LawnGreen', 'Green', 'Lime', 'SpringGreen', 'MediumSpringGreen', 'Turquoise',
@@ -174,38 +175,44 @@ for x in range(MOBS_QUANTITY):
     players[server_mob.id] = local_mob
 
 server_works = True
-
+tick = -1
 while server_works:
     clock.tick(FPS)
+    tick += 1
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             server_works = False
-
-    try:
-        new_sock, addr = main_socket.accept()
-        print(new_sock, addr)
-        new_sock.setblocking(False)
-        login = new_sock.recv(1024).decode()
-        player = Player('bob', addr)
-        if login.startswith('color'):
-            data = find_color(login[6:])
-            player.name, player.color = data
-        s.merge(player)
-        s.commit()
-        addr = f'({addr[0]},{addr[1]})'
-        data = s.query(Player).filter(Player.address == addr)
-        for user in data:
-            player = LocalPlayer(user.id, 'bob', new_sock, addr).load()
-            players[user.id] = player
-    except BlockingIOError:
-        pass
-    for id in list(players):
+    if tick % 200 == 0:
         try:
-            data = players[id].sock.recv(1024).decode()
-            print(data)
-            players[id].change_speed(data)
-        except:
+            new_sock, addr = main_socket.accept()
+            print(new_sock, addr)
+            new_sock.setblocking(False)
+            login = new_sock.recv(1024).decode()
+            player = Player('bob', addr)
+            if login.startswith('color'):
+                data = find_color(login[6:])
+                player.name, player.color = data
+            s.merge(player)
+            s.commit()
+            addr = f'({addr[0]},{addr[1]})'
+            data = s.query(Player).filter(Player.address == addr)
+            for user in data:
+                player = LocalPlayer(user.id, 'bob', new_sock, addr).load()
+                players[user.id] = player
+        except BlockingIOError:
             pass
+    for id in list(players):
+        if players[id].sock is not None:
+            try:
+                data = players[id].sock.recv(1024).decode()
+                print(data)
+                players[id].change_speed(data)
+            except:
+                pass
+        else:
+            if tick % 400 == 0:
+                vector = f'<{random.randint(-1, 1)},{random.randint(-1, 1)}>'
+                players[id].change_speed(vector)
 
     visible_bacterias = {}
     for id in list(players):
@@ -219,30 +226,38 @@ while server_works:
             dist_x = hero_2.x - hero_1.x
             dist_y = hero_2.y - hero_1.y
             if abs(dist_x) <= hero_1.w_vision // 2 + hero_2.size and abs(dist_x) <= hero_1.h_vision // 2 + hero_2.size:
-                x_ = str(round(dist_x))
-                y_ = str(round(dist_y))
-                size_ = str(round(hero_2.size))
-                color_ = hero_2.color
-                data = f'{x_} {y_} {size_} {color_}'
-                visible_bacterias[hero_1.id].append(data)
+                distance = math.sqrt(dist_x ** 2 + dist_y ** 2)
+                if distance <= hero_1.size and hero_1.size > hero_2.size * 1.1:
+                    hero_2.size,hero_2.speed_x,hero_2.speed_y = 0,0,0
+                if hero_1.address is not None:
+                    x_ = str(round(dist_x))
+                    y_ = str(round(dist_y))
+                    size_ = str(round(hero_2.size))
+                    color_ = hero_2.color
+                    data = f'{x_} {y_} {size_} {color_}'
+                    visible_bacterias[hero_1.id].append(data)
             if abs(dist_x) <= hero_2.w_vision // 2 + hero_1.size and abs(dist_x) <= hero_2.h_vision // 2 + hero_1.size:
-                x_ = str(round(dist_x))
-                y_ = str(round(dist_y))
-                size_ = str(round(hero_1.size))
-                color_ = hero_1.color
-                data = f'{x_} {y_} {size_} {color_}'
-                visible_bacterias[hero_2.id].append(data)
+                distance = math.sqrt(dist_x ** 2 + dist_y ** 2)
+                if distance <= hero_2.size and hero_2.size > hero_1.size * 1.1:
+                    hero_1.size, hero_1.speed_x, hero_1.speed_y = 0, 0, 0
+                if hero_2.address is not None:
+                    x_ = str(round(-dist_x))
+                    y_ = str(round(-dist_y))
+                    size_ = str(round(hero_1.size))
+                    color_ = hero_1.color
+                    data = f'{x_} {y_} {size_} {color_}'
+                    visible_bacterias[hero_2.id].append(data)
     for id in list(players):
         visible_bacterias[id] = '<' + ','.join(visible_bacterias[id]) + '>'
 
     for id in list(players):
-        try:
-            players[id].sock.send(visible_bacterias[id].encode())
-        except:
-            # del players[id]
-            # players[id].sock.close()
-            # print('сокет закрыт')
-            pass
+        if players[id].sock is not None:
+            try:
+                players[id].sock.send(visible_bacterias[id].encode())
+            except:
+                del players[id]
+                players[id].sock.close()
+                print('сокет закрыт')
     screen.fill('black')
     for id in list(players):
         player = players[id]
